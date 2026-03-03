@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="panel">
+  <h1>Ingestion Preview</h1>
+  <p>{{ message }}</p>
+
+  {% if preview_image %}
+    <div class="preview-shot-wrap">
+      <img src="/previews/{{ preview_image }}" alt="Playwright page preview" class="preview-shot" />
+    </div>
+  {% endif %}
+
+  <form method="post" action="/ingest" class="ingest-form">
+    <input type="hidden" name="url" value="{{ url }}" />
+    <button type="submit">Ingest This URL</button>
+  </form>
+
+  <h3>Sample scraped image URLs ({{ sample_urls|length }} shown of {{ image_count }})</h3>
+  {% if sample_urls %}
+    <ul class="url-list">
+      {% for item in sample_urls %}
+        <li><a href="{{ item }}" target="_blank" rel="noopener noreferrer">{{ item }}</a></li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>No image URLs found.</p>
+  {% endif %}
+</section>
+{% endblock %}

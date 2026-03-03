@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+jinja2
+python-multipart
+sqlalchemy
+pillow
+playwright
+insightface
+faiss-cpu
+numpy
+requests
+onnxruntime

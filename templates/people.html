@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="panel">
+  <h1>People</h1>
+  {% if people %}
+    <div class="people-grid">
+      {% for person in people %}
+        <a href="/person/{{ person.id }}" class="person-card">
+          {% if person.preview_face_path %}
+            <img src="/faces/{{ person.preview_face_path }}" alt="Preview for Person {{ person.id }}" class="person-preview" />
+          {% else %}
+            <div class="person-preview person-preview-empty">No preview</div>
+          {% endif %}
+          <div class="person-meta">
+            <strong>Person {{ person.id }}</strong>
+            <span>{{ person.face_count }} faces</span>
+          </div>
+        </a>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p>No people detected yet.</p>
+  {% endif %}
+</section>
+{% endblock %}

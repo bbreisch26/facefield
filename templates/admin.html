@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="panel">
+  <h1>Admin</h1>
+  <p>People in DB: <strong>{{ people_count }}</strong></p>
+  <p>Faces in DB: <strong>{{ face_count }}</strong></p>
+
+  <form method="post" action="/admin/clear-person-face" class="admin-form">
+    <button type="submit" class="button-danger">Clear People + Faces</button>
+  </form>
+  <p class="admin-note">This deletes all rows in <code>people</code> and <code>faces</code>.</p>
+</section>
+{% endblock %}

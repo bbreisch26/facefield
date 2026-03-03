@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="panel">
+  <h2>Person {{ person.id }}</h2>
+
+  <h3>Faces</h3>
+  <div class="grid">
+    {% for face in faces %}
+      <img src="/faces/{{ face.face_path }}" alt="Face {{ face.id }}" class="thumb" />
+    {% endfor %}
+  </div>
+
+  <h3>Images</h3>
+  <div class="grid">
+    {% for image in images %}
+      <div class="image-card">
+        <img src="/images/{{ image.file_path }}" alt="Image {{ image.id }}" class="thumb image-card-thumb" />
+        <div class="image-card-body">
+          {% if image.ingest_page_url %}
+            <a href="{{ image.ingest_page_url }}" target="_blank" rel="noopener noreferrer" class="image-card-link" title="{{ image.ingest_page_url }}">Source page: {{ image.ingest_page_url }}</a>
+          {% endif %}
+          <a href="{{ image.source_url }}" target="_blank" rel="noopener noreferrer" class="image-card-link" title="{{ image.source_url }}">{{ image.source_url }}</a>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

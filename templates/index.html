@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="panel">
+  <h1>Ingest Photos</h1>
+  <p>Paste a URL to scrape images and group detected faces.</p>
+  <form method="post" action="/ingest" class="ingest-form">
+    <input type="text" name="url" required placeholder="https://example.com/gallery" />
+    <button type="submit">Ingest</button>
+    <button type="submit" formaction="/preview">Preview Page</button>
+  </form>
+  <p><a href="/people">Browse detected people</a></p>
+</section>
+{% endblock %}
