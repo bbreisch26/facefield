@@ -37,8 +37,8 @@ faiss_index/
 ## Installation
 ### 1. Clone
 ```bash
-git clone <your-repo-url>.git
-cd <your-repo-folder>
+git clone https://github.com/bbreisch26/facefield.git
+cd facefield
 ```
 
 ### 2. Create and activate virtual environment
