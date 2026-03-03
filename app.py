@@ -22,6 +22,7 @@ from scraper import scrape_images, scrape_images_with_preview
 
 SIMILARITY_THRESHOLD = 0.50
 FAISS_INDEX_PATH = Path("faiss_index/index.bin")
+PEOPLE_PER_PAGE = 30
 
 
 class FaceMatcher:
@@ -324,29 +325,44 @@ def preview(request: Request, url: str = Form(...)):
 
 
 @app.get("/people")
-def people(request: Request, db: Session = Depends(get_db)):
+def people(request: Request, page: int = 1, db: Session = Depends(get_db)):
+    page = max(1, page)
+    offset = (page - 1) * PEOPLE_PER_PAGE
+
+    total_people = db.query(func.count(Person.id)).scalar() or 0
+    total_pages = max(1, (total_people + PEOPLE_PER_PAGE - 1) // PEOPLE_PER_PAGE)
+    if page > total_pages:
+        page = total_pages
+        offset = (page - 1) * PEOPLE_PER_PAGE
+
     rows = (
         db.query(Person.id, func.count(Face.id).label("face_count"))
         .outerjoin(Face, Face.person_id == Person.id)
         .group_by(Person.id)
-        .order_by(Person.id.asc())
+        .order_by(func.count(Face.id).desc(), Person.id.asc())
+        .offset(offset)
+        .limit(PEOPLE_PER_PAGE)
         .all()
     )
 
-    first_face_subq = (
-        db.query(
-            Face.person_id.label("person_id"),
-            func.min(Face.id).label("first_face_id"),
+    preview_by_person: Dict[int, str] = {}
+    person_ids = [row.id for row in rows]
+    if person_ids:
+        first_face_subq = (
+            db.query(
+                Face.person_id.label("person_id"),
+                func.min(Face.id).label("first_face_id"),
+            )
+            .filter(Face.person_id.in_(person_ids))
+            .group_by(Face.person_id)
+            .subquery()
         )
-        .group_by(Face.person_id)
-        .subquery()
-    )
-    preview_rows = (
-        db.query(Face.person_id, Face.face_path)
-        .join(first_face_subq, Face.id == first_face_subq.c.first_face_id)
-        .all()
-    )
-    preview_by_person = {row.person_id: row.face_path for row in preview_rows}
+        preview_rows = (
+            db.query(Face.person_id, Face.face_path)
+            .join(first_face_subq, Face.id == first_face_subq.c.first_face_id)
+            .all()
+        )
+        preview_by_person = {row.person_id: row.face_path for row in preview_rows}
 
     people_data: List[Dict] = [
         {
@@ -362,6 +378,10 @@ def people(request: Request, db: Session = Depends(get_db)):
         {
             "request": request,
             "people": people_data,
+            "page": page,
+            "total_pages": total_pages,
+            "has_prev": page > 1,
+            "has_next": page < total_pages,
         },
     )
 

@@ -1,17 +1,26 @@
 from pathlib import Path
+import random
 from typing import List, Optional, Tuple
 from urllib.parse import urljoin
 from uuid import uuid4
 
 from playwright.sync_api import sync_playwright
 
+user_agents = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/117.0",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Safari/605.1.15"
+]
+
 
 def _scrape(url: str, include_preview: bool) -> Tuple[List[str], Optional[str]]:
     urls = set()
     preview_filename = None
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
+        browser = p.chromium.launch(headless=False)
+        context = browser.new_context(user_agent=random.choice(user_agents))
+        page = context.new_page()
         page.goto(url, wait_until="networkidle")
         if include_preview:
             preview_filename = f"{uuid4().hex}.jpg"
