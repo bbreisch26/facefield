@@ -10,6 +10,9 @@ Web photo ingestion + face grouping prototype built with FastAPI, Jinja template
 - Group faces into people using FAISS cosine similarity search
 - Browse people and person detail pages
 - Admin action to clear person/face data
+- Social ingestion API for account interaction graph captures
+- Social account search + ego-network API/UI
+- Firefox extension for manual Facebook comment/reply/mention capture
 
 ## Tech Stack
 - FastAPI + Jinja2 templates
@@ -32,6 +35,7 @@ images/
 faces/
 previews/
 faiss_index/
+extension/
 ```
 
 ## Installation
@@ -64,6 +68,7 @@ uvicorn app:app --reload
 
 Open:
 - http://localhost:8000
+- http://localhost:8000/social
 
 ## Usage
 1. Go to `/`.
@@ -77,6 +82,18 @@ Open:
 - Downloaded images are stored under `images/`.
 - Face crops are stored under `faces/`.
 - FAISS index is stored under `faiss_index/index.bin`.
+- Set `SOCIAL_API_KEY` before using `POST /api/social/captures`.
+
+## Social Capture API
+- `POST /api/social/captures` with header `X-API-Key`
+- `GET /api/social/accounts/search?q=<term>&platform=<facebook|instagram|x>`
+- `GET /api/social/accounts/{id}/ego?direction=<in|out|both>&type=<comment|reply|mention>`
+
+## Firefox Extension
+- Extension source is in `extension/firefox/`.
+- Load the extension in Firefox from `manifest.json`.
+- Configure backend URL and API key in extension options.
+- Open a Facebook page/post and click `Capture Current Page`.
 
 ## Troubleshooting
 - If Playwright fails to launch, re-run `playwright install`.

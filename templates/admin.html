@@ -2,12 +2,24 @@
 {% block content %}
 <section class="panel">
   <h1>Admin</h1>
-  <p>People in DB: <strong>{{ people_count }}</strong></p>
-  <p>Faces in DB: <strong>{{ face_count }}</strong></p>
+  <div>
+    <p>People in DB: <strong>{{ people_count }}</strong></p>
+    <p>Faces in DB: <strong>{{ face_count }}</strong></p>
+  
 
-  <form method="post" action="/admin/clear-person-face" class="admin-form">
-    <button type="submit" class="button-danger">Clear People + Faces</button>
-  </form>
-  <p class="admin-note">This deletes all rows in <code>people</code> and <code>faces</code>.</p>
+    <form method="post" action="/admin/clear-person-face" class="admin-form">
+      <button type="submit" class="button-danger">Clear People + Faces</button>
+    </form>
+    <p class="admin-note">This deletes all rows in <code>people</code> and <code>faces</code>.</p>
+  </div>
+  <div>
+    <p>Social accounts in DB: <strong>{{ social_account_count }}</strong></p>
+    <p>Social interactions in DB: <strong>{{ social_interaction_count }}</strong></p>
+    <p>Social captures in DB: <strong>{{ social_capture_count }}</strong></p>
+    <form method="post" action="/admin/clear-social-data" class="admin-form">
+      <button type="submit" class="button-danger">Clear Social Data</button>
+    </form>
+    <p class="admin-note">This deletes all rows in <code>social_accounts</code>, <code>social_content</code>, <code>social_capture_raw</code>, and <code>social_interactions</code>.</p>
+  </div>
 </section>
 {% endblock %}

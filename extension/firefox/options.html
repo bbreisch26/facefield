@@ -1,0 +1,27 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Facefield Collector Settings</title>
+    <style>
+      body { font-family: sans-serif; margin: 20px; max-width: 700px; }
+      label { display: block; margin-top: 12px; font-weight: 600; }
+      input { width: 100%; padding: 8px; margin-top: 6px; }
+      button { margin-top: 14px; padding: 8px 12px; }
+      #status { margin-top: 10px; }
+    </style>
+  </head>
+  <body>
+    <h2>Facefield Social Collector</h2>
+    <p>Configure backend URL and API key for POST /api/social/captures.</p>
+    <label for="apiBaseUrl">API Base URL</label>
+    <input id="apiBaseUrl" type="text" placeholder="http://localhost:8000" />
+
+    <label for="apiKey">X-API-Key</label>
+    <input id="apiKey" type="password" placeholder="Set SOCIAL_API_KEY value" />
+
+    <button id="save">Save</button>
+    <div id="status"></div>
+    <script src="options.js"></script>
+  </body>
+</html>

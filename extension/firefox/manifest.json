@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "Facefield Social Collector",
+  "version": "0.1.0",
+  "description": "Manual Facebook interaction capture for Facefield social graph ingestion.",
+  "permissions": ["activeTab", "storage", "scripting"],
+  "host_permissions": [
+    "http://localhost:8000/*",
+    "https://localhost:8000/*",
+    "*://*.facebook.com/*"
+  ],
+  "action": {
+    "default_title": "Capture Social Interactions",
+    "default_popup": "popup.html"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "background": {
+    "service_worker": "background.js",
+    "scripts": ["background.js"]
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://*.facebook.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

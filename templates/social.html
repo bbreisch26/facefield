@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="panel">
+  <h1>Social Graph</h1>
+  <p>Search accounts and inspect 1-hop interaction networks.</p>
+
+  <form method="get" action="/social" class="ingest-form">
+    <input type="text" name="q" value="{{ search_query }}" placeholder="Search handle, display name, or account ID" />
+    <select name="platform">
+      <option value="">All platforms</option>
+      {% for platform in platform_options %}
+        <option value="{{ platform }}" {% if selected_platform == platform %}selected{% endif %}>{{ platform }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit">Search</button>
+  </form>
+
+  {% if results %}
+    <div class="social-results">
+      {% for account in results %}
+        <a class="social-result-item" href="/social?q={{ search_query }}&platform={{ selected_platform }}&account_id={{ account.id }}&direction=both">
+          <strong>{{ account.display_name or account.handle or account.platform_account_id }}</strong>
+          <span>{{ account.platform }} / {{ account.handle or account.platform_account_id }}</span>
+        </a>
+      {% endfor %}
+    </div>
+  {% elif search_query %}
+    <p>No matching accounts found.</p>
+  {% endif %}
+</section>
+
+{% if not selected_account_id %}
+  <section class="panel">
+    <h2>Dashboard</h2>
+    <div class="social-stats">
+      <div class="social-stat-card">
+        <span>Accounts</span>
+        <strong>{{ dashboard_stats.accounts }}</strong>
+      </div>
+      <div class="social-stat-card">
+        <span>Interactions</span>
+        <strong>{{ dashboard_stats.interactions }}</strong>
+      </div>
+      <div class="social-stat-card">
+        <span>Captures</span>
+        <strong>{{ dashboard_stats.captures }}</strong>
+      </div>
+    </div>
+
+    <div class="social-table-wrap">
+      <table class="social-table">
+        <thead>
+          <tr>
+            <th>Collected Time</th>
+            <th>Platform</th>
+            <th>Type</th>
+            <th>From</th>
+            <th>To</th>
+            <th>Count</th>
+            <th>Comment Text</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in dashboard_rows %}
+            <tr>
+              <td>{{ row.last_seen_at }}</td>
+              <td>{{ row.platform }}</td>
+              <td>{{ row.interaction_type }}</td>
+              <td>
+                <a href="/social?account_id={{ row.source_id }}&direction=both">
+                  {{ row.source_display_name or row.source_handle or row.source_id }}
+                </a>
+              </td>
+              <td>
+                <a href="/social?account_id={{ row.target_id }}&direction=both">
+                  {{ row.target_display_name or row.target_handle or row.target_id }}
+                </a>
+              </td>
+              <td>{{ row.count }}</td>
+              <td class="social-table-text">{{ row.text_snippet or "" }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% if not dashboard_rows %}
+        <p>No social interactions captured yet.</p>
+      {% endif %}
+    </div>
+  </section>
+{% endif %}
+
+{% if ego %}
+  <section class="panel">
+    <a href="/social" class="social-back-link" aria-label="Back to social dashboard">← Back</a>
+    <h2>Account View</h2>
+    <p>
+      <strong>{{ ego.account.display_name or ego.account.handle or ego.account.platform_account_id }}</strong>
+      ({{ ego.account.platform }} / {{ ego.account.handle or ego.account.platform_account_id }})
+    </p>
+    {% if ego.account.profile_url %}
+      <p><a href="{{ ego.account.profile_url }}" target="_blank" rel="noopener noreferrer">{{ ego.account.profile_url }}</a></p>
+    {% endif %}
+
+    <form method="get" action="/social" class="ingest-form">
+      <input type="hidden" name="q" value="{{ search_query }}" />
+      <input type="hidden" name="platform" value="{{ selected_platform }}" />
+      <input type="hidden" name="account_id" value="{{ ego.account.id }}" />
+      <select name="direction">
+        <option value="both" {% if direction == "both" %}selected{% endif %}>Both directions</option>
+        <option value="in" {% if direction == "in" %}selected{% endif %}>Inbound only</option>
+        <option value="out" {% if direction == "out" %}selected{% endif %}>Outbound only</option>
+      </select>
+      <select name="type">
+        <option value="">All types</option>
+        {% for it in interaction_types %}
+          <option value="{{ it }}" {% if interaction_type == it %}selected{% endif %}>{{ it }}</option>
+        {% endfor %}
+      </select>
+      <button type="submit">Apply Filters</button>
+    </form>
+
+    <div class="graph-mini">
+      <div class="graph-center">
+        <div class="graph-node graph-node-center">You</div>
+      </div>
+      <div class="graph-list">
+        {% for edge in ego.edges %}
+          <div class="graph-row">
+            <span class="graph-badge">{{ edge.direction }}</span>
+            <a
+              class="graph-counterpart-link"
+              href="/social?q={{ search_query }}&platform={{ selected_platform }}&account_id={{ edge.counterpart_account_id }}&direction=both"
+            >
+              {{ edge.counterpart_display_name or edge.counterpart_handle or edge.counterpart_account_id }}
+            </a>
+            <span>{{ edge.interaction_type }}</span>
+            <strong>{{ edge.total_count }}</strong>
+            {% if edge.latest_text_snippet %}
+              <div class="graph-text">{{ edge.latest_text_snippet }}</div>
+            {% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+{% endif %}
+{% endblock %}

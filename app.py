@@ -1,5 +1,7 @@
 import base64
 import binascii
+import os
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from uuid import uuid4
@@ -8,21 +10,32 @@ from urllib.parse import unquote_to_bytes, urlparse
 import faiss
 import numpy as np
 import requests
-from fastapi import Depends, FastAPI, Form, Request
+from fastapi import Depends, FastAPI, Form, Header, HTTPException, Query, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import func
-from sqlalchemy.orm import Session
+from sqlalchemy import func, or_
+from sqlalchemy.orm import Session, aliased
 
 from database import SessionLocal, init_db
 from face_engine import process_image
-from models import Face, Image, Person
+from models import Face, Image, Person, SocialAccount, SocialCaptureRaw, SocialContent, SocialInteraction
 from scraper import scrape_images, scrape_images_with_preview
+from social_graph import (
+    CaptureBatch,
+    INTERACTION_TYPES,
+    SUPPORTED_PLATFORMS,
+    query_ego_network,
+    validate_api_key,
+    ingest_capture_batch,
+    normalize_platform,
+)
 
 SIMILARITY_THRESHOLD = 0.50
 FAISS_INDEX_PATH = Path("faiss_index/index.bin")
 PEOPLE_PER_PAGE = 30
+SOCIAL_API_KEY_ENV = "SOCIAL_API_KEY"
 
 
 class FaceMatcher:
@@ -105,6 +118,14 @@ app = FastAPI(title="FACEFIELD")
 templates = Jinja2Templates(directory="templates")
 matcher = FaceMatcher()
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.mount("/static", StaticFiles(directory="static"), name="static")
 app.mount("/images", StaticFiles(directory="images"), name="images")
 app.mount("/faces", StaticFiles(directory="faces"), name="faces")
@@ -117,6 +138,16 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def require_social_api_key(x_api_key: Optional[str] = Header(default=None)) -> None:
+    expected = os.getenv(SOCIAL_API_KEY_ENV, "").strip()
+    try:
+        validate_api_key(provided_key=x_api_key, expected_key=expected)
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
 
 
 def ensure_directories() -> None:
@@ -386,16 +417,191 @@ def people(request: Request, page: int = 1, db: Session = Depends(get_db)):
     )
 
 
+@app.post("/api/social/captures", dependencies=[Depends(require_social_api_key)])
+def api_social_capture(payload: CaptureBatch, db: Session = Depends(get_db)):
+    result = ingest_capture_batch(db, payload)
+    return {"status": "ok", "platform": payload.platform, **result}
+
+
+@app.get("/api/social/accounts/search")
+def api_social_account_search(
+    q: str = Query(..., min_length=1),
+    platform: Optional[str] = Query(default=None),
+    limit: int = Query(default=25, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    query = db.query(SocialAccount)
+    if platform:
+        try:
+            normalized_platform = normalize_platform(platform)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        query = query.filter(SocialAccount.platform == normalized_platform)
+
+    term = f"%{q.strip()}%"
+    rows = (
+        query.filter(
+            or_(
+                SocialAccount.handle.ilike(term),
+                SocialAccount.display_name.ilike(term),
+                SocialAccount.platform_account_id.ilike(term),
+            )
+        )
+        .order_by(SocialAccount.platform.asc(), SocialAccount.id.asc())
+        .limit(limit)
+        .all()
+    )
+    return {
+        "results": [
+            {
+                "id": row.id,
+                "platform": row.platform,
+                "platform_account_id": row.platform_account_id,
+                "handle": row.handle,
+                "display_name": row.display_name,
+                "profile_url": row.profile_url,
+            }
+            for row in rows
+        ]
+    }
+
+
+@app.get("/api/social/accounts/{account_id}/ego")
+def api_social_ego(
+    account_id: int,
+    direction: str = Query(default="both"),
+    interaction_type: Optional[str] = Query(default=None, alias="type"),
+    since: Optional[datetime] = Query(default=None),
+    until: Optional[datetime] = Query(default=None),
+    db: Session = Depends(get_db),
+):
+    try:
+        return query_ego_network(
+            db,
+            account_id=account_id,
+            direction=direction,
+            interaction_type=interaction_type,
+            since=since,
+            until=until,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.get("/social")
+def social_page(
+    request: Request,
+    q: Optional[str] = Query(default=None),
+    platform: Optional[str] = Query(default=None),
+    account_id: Optional[int] = Query(default=None),
+    direction: str = Query(default="both"),
+    interaction_type: Optional[str] = Query(default=None, alias="type"),
+    db: Session = Depends(get_db),
+):
+    source_account = aliased(SocialAccount)
+    target_account = aliased(SocialAccount)
+    dashboard_rows = (
+        db.query(
+            SocialInteraction.id.label("id"),
+            SocialInteraction.platform.label("platform"),
+            SocialInteraction.interaction_type.label("interaction_type"),
+            SocialInteraction.count.label("count"),
+            SocialInteraction.last_seen_at.label("last_seen_at"),
+            SocialInteraction.text_snippet.label("text_snippet"),
+            source_account.id.label("source_id"),
+            source_account.handle.label("source_handle"),
+            source_account.display_name.label("source_display_name"),
+            target_account.id.label("target_id"),
+            target_account.handle.label("target_handle"),
+            target_account.display_name.label("target_display_name"),
+        )
+        .join(source_account, SocialInteraction.source_account_id == source_account.id)
+        .join(target_account, SocialInteraction.target_account_id == target_account.id)
+        .order_by(SocialInteraction.last_seen_at.desc())
+        .limit(30)
+        .all()
+    )
+    dashboard_stats = {
+        "accounts": db.query(func.count(SocialAccount.id)).scalar() or 0,
+        "interactions": db.query(func.count(SocialInteraction.id)).scalar() or 0,
+        "captures": db.query(func.count(SocialCaptureRaw.id)).scalar() or 0,
+    }
+
+    selected_platform = ""
+    if platform:
+        try:
+            selected_platform = normalize_platform(platform)
+        except ValueError:
+            selected_platform = ""
+
+    results: List[SocialAccount] = []
+    if q:
+        account_query = db.query(SocialAccount)
+        if selected_platform:
+            account_query = account_query.filter(SocialAccount.platform == selected_platform)
+        term = f"%{q.strip()}%"
+        results = (
+            account_query.filter(
+                or_(
+                    SocialAccount.handle.ilike(term),
+                    SocialAccount.display_name.ilike(term),
+                    SocialAccount.platform_account_id.ilike(term),
+                )
+            )
+            .order_by(SocialAccount.platform.asc(), SocialAccount.id.asc())
+            .limit(50)
+            .all()
+        )
+
+    ego_data = None
+    if account_id:
+        try:
+            ego_data = query_ego_network(
+                db,
+                account_id=account_id,
+                direction=direction,
+                interaction_type=interaction_type,
+            )
+        except (LookupError, ValueError):
+            ego_data = None
+
+    return templates.TemplateResponse(
+        "social.html",
+        {
+            "request": request,
+            "search_query": q or "",
+            "selected_platform": selected_platform,
+            "platform_options": sorted(SUPPORTED_PLATFORMS),
+            "results": results,
+            "selected_account_id": account_id,
+            "direction": direction,
+            "interaction_type": interaction_type or "",
+            "interaction_types": sorted(INTERACTION_TYPES),
+            "ego": ego_data,
+            "dashboard_rows": dashboard_rows,
+            "dashboard_stats": dashboard_stats,
+        },
+    )
+
+
 @app.get("/admin")
 def admin(request: Request, db: Session = Depends(get_db)):
     people_count = db.query(func.count(Person.id)).scalar() or 0
     face_count = db.query(func.count(Face.id)).scalar() or 0
+    social_account_count = db.query(func.count(SocialAccount.id)).scalar() or 0
+    social_interaction_count = db.query(func.count(SocialInteraction.id)).scalar() or 0
+    social_capture_count = db.query(func.count(SocialCaptureRaw.id)).scalar() or 0
     return templates.TemplateResponse(
         "admin.html",
         {
             "request": request,
             "people_count": people_count,
             "face_count": face_count,
+            "social_account_count": social_account_count,
+            "social_interaction_count": social_interaction_count,
+            "social_capture_count": social_capture_count,
         },
     )
 
@@ -407,6 +613,16 @@ def clear_person_face_data(db: Session = Depends(get_db)):
     db.query(Image).update({Image.contains_person: False}, synchronize_session=False)
     db.commit()
     matcher.reset()
+    return RedirectResponse(url="/admin", status_code=303)
+
+
+@app.post("/admin/clear-social-data")
+def clear_social_data(db: Session = Depends(get_db)):
+    db.query(SocialInteraction).delete(synchronize_session=False)
+    db.query(SocialContent).delete(synchronize_session=False)
+    db.query(SocialAccount).delete(synchronize_session=False)
+    db.query(SocialCaptureRaw).delete(synchronize_session=False)
+    db.commit()
     return RedirectResponse(url="/admin", status_code=303)
 
 

@@ -10,3 +10,4 @@ faiss-cpu
 numpy
 requests
 onnxruntime
+pytest
